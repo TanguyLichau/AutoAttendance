@@ -4,6 +4,34 @@ require("dotenv").config();
 const EMAIL = process.env.EMAIL;
 const PSW = process.env.PASSWORD;
 
+async function validerAppel(uid, alvstu, simplesaml, samlauth) {
+  const response = await fetch(
+    `https://www.leonard-de-vinci.net/student/presences/upload.php`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+        Origin: "https://www.leonard-de-vinci.net",
+        Referer: "https://www.leonard-de-vinci.net/",
+        "X-Requested-With": "XMLHttpRequest",
+        Cookie:
+          "alvstu=" +
+          alvstu +
+          ";" +
+          " SimpleSAML=" +
+          simplesaml +
+          ";" +
+          " SimpleSAMLAuthToken=" +
+          samlauth +
+          ";" +
+          " uids=" +
+          uid +
+          ";",
+      },
+    }
+  );
+}
+
 async function yo() {
   const browser = await puppeteer.launch({ headless: false });
   const page = await browser.newPage();
@@ -18,13 +46,22 @@ async function yo() {
   await page.focus("#passwordInput");
   await page.keyboard.type(PSW);
   await page.click("#submitButton");
-
-  //const cookies = await page.cookies(
-  // "https://www.leonard-de-vinci.net/?my=edt"
-  //);
+  await page.waitForNavigation();
   const client = await page.target().createCDPSession();
-  const cookies = (await client.send("Network.getAllCookies")).cookies;
-  console.log("cookies : " + JSON.stringify(cookies));
+  let listcookies = (await client.send("Storage.getCookies")).cookies;
+  const uid = listcookies.find((element) => element.name == "uids").value;
+  const alvstu = listcookies.find((element) => element.name == "alvstu").value;
+  const SimpleSAML = listcookies.find(
+    (element) => element.name == "SimpleSAML"
+  ).value;
+  const SimpleSAMLAuthToken = listcookies.find(
+    (element) => element.name == "SimpleSAMLAuthToken"
+  ).value;
+
+  await page.goto("https://www.leonard-de-vinci.net/student/presences/");
+
+  const f = await page.$("#body_presences");
+  console.log(f);
 }
 
 yo();
