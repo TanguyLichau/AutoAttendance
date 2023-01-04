@@ -1,3 +1,4 @@
+const { cp } = require("fs");
 const puppeteer = require("puppeteer");
 require("dotenv").config();
 
@@ -28,12 +29,19 @@ async function validerAppel(uid, alvstu, simplesaml, samlauth) {
           uid +
           ";",
       },
+      body: new URLSearchParams({
+        act: "set_present",
+        seance_pk: "27747252",
+      }),
     }
   );
 }
 
 async function yo() {
-  const browser = await puppeteer.launch({ headless: false });
+  const browser = await puppeteer.launch({
+    headless: false,
+    defaultViewport: false,
+  });
   const page = await browser.newPage();
 
   await page.goto("https://www.leonard-de-vinci.net/");
@@ -60,8 +68,22 @@ async function yo() {
 
   await page.goto("https://www.leonard-de-vinci.net/student/presences/");
 
-  const f = await page.$("#body_presences");
-  console.log(f);
+  const dob = await page.$$("#body_presences");
+
+  // Select all the links on the page
+  const links = await page.evaluate(() => {
+    const anchors = Array.from(document.querySelectorAll("a"));
+    return anchors.map((a) => a.href);
+  });
+
+  // Filter the links to get the ones that match the regular expression
+  const regex = /\/student\/presences\/(\d+)/;
+  const matchingLinks = links.filter((link) => link.match(regex));
+
+  // Extract the digits from the matching links
+  const digits = matchingLinks.map((link) => link.match(regex)[1]);
+
+  console.log(digits);
 }
 
 yo();
