@@ -5,7 +5,7 @@ require("dotenv").config();
 const EMAIL = process.env.EMAIL;
 const PSW = process.env.PASSWORD;
 
-async function validerAppel(uid, alvstu, simplesaml, samlauth) {
+async function validerAppel(uid, alvstu, simplesaml, samlauth, seance_pkId) {
   const response = await fetch(
     `https://www.leonard-de-vinci.net/student/presences/upload.php`,
     {
@@ -31,19 +31,24 @@ async function validerAppel(uid, alvstu, simplesaml, samlauth) {
       },
       body: new URLSearchParams({
         act: "set_present",
-        seance_pk: "27747252",
+        seance_pk: seance_pkId,
       }),
     }
   );
+  if (response.headers.get("content-length")) return true;
+  console.log(response.headers.get("content-length"));
+  //console.log(typeof response);
+  //console.log
+  return false;
 }
 
-async function yo() {
+async function main() {
+  //#region connectToSite
   const browser = await puppeteer.launch({
-    headless: false,
+    headless: true,
     defaultViewport: false,
   });
   const page = await browser.newPage();
-
   await page.goto("https://www.leonard-de-vinci.net/");
 
   await page.focus("#login");
@@ -55,6 +60,8 @@ async function yo() {
   await page.keyboard.type(PSW);
   await page.click("#submitButton");
   await page.waitForNavigation();
+  //#endregion
+  //#region getCookies
   const client = await page.target().createCDPSession();
   let listcookies = (await client.send("Storage.getCookies")).cookies;
   const uid = listcookies.find((element) => element.name == "uids").value;
@@ -65,25 +72,62 @@ async function yo() {
   const SimpleSAMLAuthToken = listcookies.find(
     (element) => element.name == "SimpleSAMLAuthToken"
   ).value;
-
+  //#endregion
   await page.goto("https://www.leonard-de-vinci.net/student/presences/");
 
-  const dob = await page.$$("#body_presences");
-
-  // Select all the links on the page
+  const text = await page.evaluate(() => {
+    const anchors = Array.from(document.querySelectorAll("td"));
+    return anchors.map((a) => a.innerText);
+  });
+  listDate = [];
+  for (let index in text) {
+    if (index % 6 == 0) listDate.push(text[index]);
+  }
+  console.log(listDate);
   const links = await page.evaluate(() => {
     const anchors = Array.from(document.querySelectorAll("a"));
     return anchors.map((a) => a.href);
   });
-
-  // Filter the links to get the ones that match the regular expression
   const regex = /\/student\/presences\/(\d+)/;
   const matchingLinks = links.filter((link) => link.match(regex));
+  const listOfSeance_pk = matchingLinks.map((link) => link.match(regex)[1]);
+  console.log(listOfSeance_pk);
 
-  // Extract the digits from the matching links
-  const digits = matchingLinks.map((link) => link.match(regex)[1]);
+  const unixTimeStartingCourse = [];
+  await listDate.forEach((date) => {
+    const [start, _] = date.split(" -");
 
-  console.log(digits);
+    const startDate = new Date();
+    startDate.setHours(start.split(":")[0]);
+    startDate.setMinutes(start.split(":")[1]);
+
+    const unixTime = Math.floor(startDate.getTime() / 1000);
+    unixTimeStartingCourse.push(unixTime);
+  });
+
+  for (let index in unixTimeStartingCourse) {
+    // delay for the setTimeout to know when we trigger it
+    const delay = unixTimeStartingCourse[index] * 1000 - Date.now();
+    //console.log(delay);
+    if (delay > -5400 * 1000) {
+      setTimeout(() => {
+        const intervalId = setInterval(async () => {
+          const success = await validerAppel(
+            uid,
+            alvstu,
+            SimpleSAML,
+            SimpleSAMLAuthToken,
+            listOfSeance_pk[index]
+          );
+          //console.log(success);
+          if (success) clearInterval(intervalId);
+        }, 1 * 60 * 1000); // ATTENTION LA C EST TOUTES LES 1 MIN
+      }, delay);
+      console.log("Done");
+    }
+  }
 }
 
-yo();
+main();
+
+process.exit(1);
